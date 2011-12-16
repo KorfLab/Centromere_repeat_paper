@@ -88,6 +88,7 @@ usage: trf-grapher.pl <options>
   -global_peaks <int> [$global_peaks]
   -alignment_threshold <int> [$alignment_threshold]
   -blast_score <float> [$blast_score]
+  -blast_identity <int> [$blast_identity]
   -copies : use copy number for the z-axis, rather than just tandem repeat mass
   -data : keep the data file produced for the graphs (deleted by default)
   -sample <int> : number of randomly chosen trace reads to use for BLAST analysis
