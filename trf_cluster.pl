@@ -32,6 +32,7 @@ my $data; # keep the data file that is produced, it's deleted by default
 my $trf; # trf input file
 my $sample; # how many (randomly chosen) Tandem repeats to use for BLAST cluster analysis
 my $min_cluster_size; # how many sequences do you need to have in a cluster for it to count?
+my $blast_identity; # what sequence identity required for BLAST searches
 my $x_min;
 my $x_max;
 my $y_min;
@@ -45,6 +46,7 @@ GetOptions ("local_peaks=i"    => \$local_peaks,
 			"mass_threshold=f" => \$mass_threshold,
 			"alignment_threshold=i" => \$alignment_threshold,
 			"blast_score=f" => \$blast_score,
+			"blast_identity=i" => \$blast_identity,
 			"min_cluster_size=i" => \$min_cluster_size,
 			"copies" => \$copies,	
 			"data" => \$data,		
@@ -67,6 +69,7 @@ $global_peaks = 10        if (!$global_peaks);
 $alignment_threshold = 10 if (!$alignment_threshold);
 $mass_threshold = 0.1     if (!$mass_threshold);
 $blast_score = 50         if (!$blast_score);
+$blast_identity = 75      if (!$blast_identity);
 $x_min = 1                if (!$x_min); 
 $x_max = 600              if (!$x_max); 
 $y_min = 20               if (!$y_min); 
@@ -234,7 +237,7 @@ print STDERR "done\n";
 
 #################################################
 #
-# 7) all vs. all blast comparison @ 75% identity 
+# 7) all vs. all blast comparison @ 75% identity (default)
 #
 #################################################
 
@@ -242,7 +245,7 @@ print STDERR "Running qstack... ";
 my $qstack = "tandem-vs-x2.qstack.gz";
 
 if (!-e $qstack) {
-	system("qstack.pl -dgs $blast_score -x10000 -i75 -w13 $sample_trf $X2 | gzip -c > $qstack") == 0 or die "Couldn't run qstack.pl\n";
+	system("qstack.pl -dgs $blast_score -x10000 -i$blast_identity -w13 $sample_trf $X2 | gzip -c > $qstack") == 0 or die "Couldn't run qstack.pl\n";
 } 
 else {
 	print STDERR " qstack already run, ";
