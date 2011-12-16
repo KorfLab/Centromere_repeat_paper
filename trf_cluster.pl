@@ -122,8 +122,8 @@ $species_name =~ s/^(\w)/\u$1/;
 #####################################################
 
 my $current_dir = getcwd;
-my $path = "$current_dir/BLAST_analysis_$sample";
-# make directory unless it already exists
+my $path = "$current_dir/BLAST_analysis_${sample}_$blast_identity";
+# make directory unless it already exists, include sample size and blast identity in directory name
 system("mkdir $path") unless -e $path;
 
 # will need two sample files
