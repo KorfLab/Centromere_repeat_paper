@@ -798,6 +798,8 @@ sub sample_fasta{
 			if(!defined($ti)){
 				# PacBio reads might contain forward slashes
 				($ti) = $header =~ m/P=([\w\/]+) /;
+				# might as well stop if we still haven't go it right
+				die "Can't extract unique id from:\n$header\n\n" if (!defined($ti));
 			}
 			$ti_to_header{$ti} = $header;
 			$ti_to_seq{$ti} = $seq;			
