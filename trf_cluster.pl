@@ -741,6 +741,19 @@ sub sample_fasta{
 			my $seq = uc $entry->seq;
 			my $header = $entry->def;
 			my ($ti) = $header =~ m/ti\|(\d+) /;
+			# tis will only exist in trace archive data, but may want to run this
+			# script with PacBio or other data. In this case, just use everything
+			# after '>' in the header as a virtual ti
+			# (P= will come from trf_wrapper.pl)
+			
+			if(!defined($ti)){
+				# PacBio reads might contain forward slashes
+				($ti) = $header =~ m/>([\w\/]+)\s*/;
+				# might as well stop if we still haven't got it right
+				die "Can't extract unique id from:\n$header\n\n" if (!defined($ti));
+			}
+
+			
 			# keep the TI for later on
 			$sampled_tis{$ti} = 1;
 			
@@ -797,8 +810,8 @@ sub sample_fasta{
 			
 			if(!defined($ti)){
 				# PacBio reads might contain forward slashes
-				($ti) = $header =~ m/>([\w\/]+) /;
-				# might as well stop if we still haven't go it right
+				($ti) = $header =~ m/>([\w\/]+)\s*/;
+				# might as well stop if we still haven't got it right
 				die "Can't extract unique id from:\n$header\n\n" if (!defined($ti));
 			}
 			$ti_to_header{$ti} = $header;
