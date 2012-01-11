@@ -870,7 +870,7 @@ sub parse_trfs{
 	my $fasta = new FAlite(\*IN);
 	while (my $entry = $fasta->nextEntry) {
 		my $header = $entry->def;
-		my ($ti) = $header =~ m/ti\|(\d+) /;
+		my $ti = get_id_from_header($header);
 
 		# was this TI in our sample of trace reads? If so, print out tandem repeat ot sample TRF file
 		if($sampled_tis{$ti}){
@@ -935,13 +935,24 @@ sub grab_id_from_header{
 	my ($ti) = $header =~ m/ti\|(\d+) /;
 
 	# tis will only exist in trace archive data, but may want to run this
-	# script with PacBio or other data. In this case, just use everything
-	# after '>' in the header as a virtual ti
+	# script with PacBio or other data. In this case, 
+	# we need a couple of steps depending on whether we are getting the data 
+	# from the *.high.trf file (header has extra info) or the *processed_trace.fa
+	# file
+	
 	if(!defined($ti)){
 		# PacBio reads might contain forward slashes
-		($ti) = $header =~ m/>([\w\/]+)\s*/;
-		# might as well stop if we still haven't got it right
-		die "Can't extract unique id from:\n$header\n\n" if (!defined($ti));
+		
+		# in TRF file, grab everything after 'P='
+		($ti) = $header =~ m/P=([\w\/]+)\s*/;
+	
+		# this won't work for FASTA files so...
+		if(!defined($ti)){	
+			($ti) = $header =~ m/>([\w\/]+)\s*/;
+
+			# might as well stop if we still haven't got it right
+			die "Can't extract unique id from:\n$header\n\n" if (!defined($ti));
+		}
 	}
 	return($ti);
 }
