@@ -870,7 +870,7 @@ sub parse_trfs{
 	my $fasta = new FAlite(\*IN);
 	while (my $entry = $fasta->nextEntry) {
 		my $header = $entry->def;
-		my $ti = get_id_from_header($header);
+		my $ti = grab_id_from_header($header);
 
 		# was this TI in our sample of trace reads? If so, print out tandem repeat ot sample TRF file
 		if($sampled_tis{$ti}){
