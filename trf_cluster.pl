@@ -790,6 +790,15 @@ sub sample_fasta{
 			my $header = $entry->def;
 			my $seq = uc $entry->seq;
 			my ($ti) = $header =~ m/ti\|(\d+) /;
+			# tis will only exist in trace archive data, but may want to run this
+			# script with PacBio or other data. In this case, just use everything
+			# after 'P=' in the header as a virtual ti
+			# (P= will come from trf_wrapper.pl)
+			
+			if(!defined($ti)){
+				# PacBio reads might contain forward slashes
+				($ti) = $header =~ m/P=([\w\/]+) /;
+			}
 			$ti_to_header{$ti} = $header;
 			$ti_to_seq{$ti} = $seq;			
 		}
