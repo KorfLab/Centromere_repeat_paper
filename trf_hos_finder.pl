@@ -67,6 +67,14 @@ my $offset = 10;
 # master hash to store all of the data for potential HOS repeats
 my %hos;
 
+# how much higher should the score of the longer repeat be in relation to shorter
+# repeat. Try 15%
+my $score_threshold = 1.15;
+
+# and what about the absolute difference in %identity
+# start with +5% in longer repeat
+my $identity_threshold = 5;
+
 ################################
 # MAIN LOOP OVER DAT FILE
 ################################
@@ -147,30 +155,44 @@ REPEAT: while(<>){
 
 print "ID\tLEVEL\tSTART\tEND\tLENGTH\tCOPIES\tSCORE\t%IDENT\tHOS?\tSEQ_ID\n";
 my $counter = 1;
-foreach my $key (keys %hos){
+HOS: foreach my $key (keys %hos){
 	my ($seq_id, $seq_counter) = split(/,/,$key);
 
 	# only want to look at sequences with multiple levels of (potential) HOS
 	my $levels = @{$hos{$key}};
 	next if ($levels == 1);
+
 		
 	# now loop over the different levels of HOS present
-	for (my $i = 0; $i < @{$hos{$key}}; $i++){
+	LEVELS: for (my $i = 0; $i < @{$hos{$key}}; $i++){
 		my ($start, $end, $repeat_length, $copies, $ratio, $score, $identity) = split(/,/, ${$hos{$key}}[$i]);
 		print "$counter\t$levels\t$start\t$end\t$repeat_length\t$copies\t$score\t$identity\t";
+		
 
+		# can't easily analyze higher level structures (level 3 or greater) for HOS
+		# so will just flag these with '???'
+		if ($levels > 2){
+			print "???\t";
+		}
 		# compare to previous repeat (but not when we have only seen 1 repeat)
-		if ($i > 0){
-			my (undef, undef, undef, undef, undef, $prev_score, $prev_identity) = split(/,/, ${$hos{$key}}[$i-1]);
+		elsif ($i > 0){
+			my (undef, undef, $prev_length, undef, undef, $prev_score, $prev_identity) = split(/,/, ${$hos{$key}}[$i-1]);
 
 			# is score of longer repeat 10% greater compared to shorter repeat?
 			# is average percentage identity of longer repeat 2% greater compared to shorter repeat?
 			# print 'hos' or 'HOS' in final output to signify weak or high confidence that this is a HOS repeat
 
-			if (($score / $prev_score > 1.1) and ($identity - $prev_identity > 2)){
+			# also need to double check whether first repeat in pair of repeats is shorter (sometimes the longer
+			# repeat is reported first). If this happens, reverse scores and identities			
+			if($prev_length > $repeat_length){
+				($score, $prev_score)       = ($prev_score, $score);
+				($identity, $prev_identity) = ($prev_identity, $identity);
+			} 
+			
+			if (($score / $prev_score > $score_threshold) and ($identity - $prev_identity > $identity_threshold)){
 				print "HOS\t";
 			}
-			elsif (($score / $prev_score > 1.1) or  ($identity - $prev_identity > 2)){
+			elsif (($score / $prev_score > $score_threshold) or  ($identity - $prev_identity > $identity_threshold)){
 				print "hos\t";
 			} else{
 				print "\t";
