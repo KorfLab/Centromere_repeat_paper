@@ -54,8 +54,8 @@ my $seq_counter = 0;
 
 # keep track of how many repeats are found in any one sequence
 # will store this data in an array
-my $seq_repeat_counter = 0; # count repeats belonging to each read
-my @seq_repeat_data;
+my $repeat_counter = 0; # count repeats belonging to each read
+my @repeat_data;
 
 # want to capture the (slightly processed) FASTA headers in the trf output
 my $header;
@@ -72,7 +72,7 @@ my %hos;
 my $score_threshold = 1.15;
 
 # and what about the absolute difference in %identity
-# start with +5% in longer repeat
+# Using criteria of needing +5% in longer repeat
 my $identity_threshold = 5;
 
 ################################
@@ -84,73 +84,39 @@ REPEAT: while(<>){
 	# skip blank likes
 	next if (m/^$/);
 
+	# extract info from Sequence headers
 	if (m/^Sequence: (.*)/) {
 		$header = $1;
 		$seq_counter++;
 		
-		# reset certain counters and data
-		$seq_repeat_counter = 0;
-		@seq_repeat_data = ();
+		# process previous repeats (if not at first sequence)
+		process_repeats($repeat_counter) unless ($seq_counter == 1);
 
-		# and now move to next line in file
-		next REPEAT;
+		# reset certain counters and data. Want to track how many repeats are seen within each sequence
+		$repeat_counter = 0;
+		@repeat_data = ();
 	}
-
 
 	# the main output that we are interested in will all be on one line which starts with various
 	# numerical details of the repeat
-	if (m/^\d+ \d+ \d+ \d+\.\d /){
+	next unless (m/^\d+ \d+ \d+ \d+\.\d /);
 
-		# capture repeat data into various variables (most will be unsused)
-		my ($start,$end,$period,$copies,$consensus,$matches,$indels,$score,$a,$c,$g,$t,$entropy,$repeat_seq) = split(/\s+/);
+	# capture repeat data into various variables (most will be unsused)
+	my ($start,$end,$period,$copies,$length,$identity,$indels,$score,$a,$c,$g,$t,$entropy,$seq) = split(/\s+/);
 
-		# if we get this far then we will capture some of the repeat data in a hash 
-		# this is to potentially compare to other repeats in the same sequence
-		$seq_repeat_counter++;
-		$seq_repeat_data[$seq_repeat_counter]{start}     = "$start";
-		$seq_repeat_data[$seq_repeat_counter]{end}       = "$end";
-		$seq_repeat_data[$seq_repeat_counter]{consensus} = "$consensus";
-		
-		# add repeat info to %HOS hash, but only if it is first repeat in sequence
-		my $key = "$header,$seq_counter";
-		my $info = "$start,$end,$consensus,$copies,1,$score,$matches";
-		push(@{$hos{$key}}, $info) if ($seq_repeat_counter == 1);
-					
-		# no point going any further until we have seen at least 2 repeats within the current sequence
-		next REPEAT unless ($seq_repeat_counter > 1);
-		
-		# loop through previous repeats. Want to see if one is a multiple of another
-		for (my $i = 1; $i < $seq_repeat_counter; $i++){
-
-			# want to see if current start/end coordinates are identical or within $offset nt of previous repeat
-			next unless (abs($start - $seq_repeat_data[$i]{start}) <= $offset);
-			next unless (abs($end   - $seq_repeat_data[$i]{end})   <= $offset);
-
-			# $ratio is the ratio of the longest repeat to the shorter one, need longer repeat to be at least 
-			# 1.85x length of shorter repeat. How we calculate this depends on whether current repeat length is 
-			# longer than previous one or not
-			my $ratio;
-			
-			if ($consensus < $seq_repeat_data[$i]{consensus}){
-				$ratio = $seq_repeat_data[$i]{'consensus'}/ $consensus;
-			} else{
-				$ratio = $consensus / $seq_repeat_data[$i]{'consensus'};
-			}
-			my $processed_ratio = $ratio;
-			$processed_ratio =~ s/\d+\.(\d+)/0\.$1/;
-
-			next unless (($processed_ratio < 0.15 or $processed_ratio > 0.85) && ($processed_ratio > 1.5));
-			
-			# we should now be looking at a multiple repeat so add it to hash
-			my $info = "$start,$end,$consensus,$copies,$ratio,$score,$matches";
-			push(@{$hos{$key}}, $info);
-							
-			# if we have seen a match, don't need to look any further
-			next REPEAT;
-		}
-	}
+	# if we get this far then we will capture some of the repeat data in a hash 
+	# this is to potentially compare to other repeats in the same sequence
+	# duplicating some info just to be lazy later on
+	$repeat_data[$repeat_counter]{start}  = "$start";
+	$repeat_data[$repeat_counter]{end}    = "$end";
+	$repeat_data[$repeat_counter]{length} = "$length";
+	$repeat_data[$repeat_counter]{key}    = "$header,$seq_counter";
+	$repeat_data[$repeat_counter]{info}   = "$start,$end,$length,$copies,$score,$identity";
+	$repeat_counter++;
 }
 
+# process repeats for last repeat
+process_repeats($repeat_counter);
 
 
 print "ID\tLEVEL\tSTART\tEND\tLENGTH\tCOPIES\tSCORE\t%IDENT\tHOS?\tSEQ_ID\n";
@@ -159,51 +125,105 @@ HOS: foreach my $key (keys %hos){
 	my ($seq_id, $seq_counter) = split(/,/,$key);
 
 	# only want to look at sequences with multiple levels of (potential) HOS
-	my $levels = @{$hos{$key}};
-	next if ($levels == 1);
+	my $level = @{$hos{$key}};
+	next if ($level == 1);
 
-		
 	# now loop over the different levels of HOS present
 	LEVELS: for (my $i = 0; $i < @{$hos{$key}}; $i++){
-		my ($start, $end, $repeat_length, $copies, $ratio, $score, $identity) = split(/,/, ${$hos{$key}}[$i]);
-		print "$counter\t$levels\t$start\t$end\t$repeat_length\t$copies\t$score\t$identity\t";
-		
+		my ($start, $end, $length, $copies, $score, $identity) = split(/,/, ${$hos{$key}}[$i]);
 
-		# can't easily analyze higher level structures (level 3 or greater) for HOS
-		# so will just flag these with '???'
-		if ($levels > 2){
-			print "???\t";
-		}
-		# compare to previous repeat (but not when we have only seen 1 repeat)
-		elsif ($i > 0){
-			my (undef, undef, $prev_length, undef, undef, $prev_score, $prev_identity) = split(/,/, ${$hos{$key}}[$i-1]);
+		if ($level == 2){
+			# first grab next tandem repeat in pair 
+			my ($n_start, $n_end, $n_length, $n_copies, $n_score, $n_identity) = split(/,/, ${$hos{$key}}[$i+1]);
 
 			# is score of longer repeat 10% greater compared to shorter repeat?
 			# is average percentage identity of longer repeat 2% greater compared to shorter repeat?
 			# print 'hos' or 'HOS' in final output to signify weak or high confidence that this is a HOS repeat
 
 			# also need to double check whether first repeat in pair of repeats is shorter (sometimes the longer
-			# repeat is reported first). If this happens, reverse scores and identities			
-			if($prev_length > $repeat_length){
-				($score, $prev_score)       = ($prev_score, $score);
-				($identity, $prev_identity) = ($prev_identity, $identity);
-			} 
-			
-			if (($score / $prev_score > $score_threshold) and ($identity - $prev_identity > $identity_threshold)){
-				print "HOS\t";
-			}
-			elsif (($score / $prev_score > $score_threshold) or  ($identity - $prev_identity > $identity_threshold)){
-				print "hos\t";
+			# repeat is reported first). If this happens, reverse scores and identities	
+			my ($s1, $s2, $i1, $i2) = ($score, $n_score, $identity, $n_identity);		
+			my $longer_score;
+			my $shorter_score;
+			my $longer_ident;
+			my $shorter_ident;
+			#ID	LEVEL	START	END		LENGTH	COPIES	SCORE	%IDENT	HOS?	SEQ_ID
+			#1	2		73		1098	273		3.7		770		79		gnl|ti|1516245357 FAPA551217.y1
+			#1	2		82		1098	137		7.4		634		67		gnl|ti|1516245357 FAPA551217.y1
+
+			if($length > $n_length){
+				($longer_score, $shorter_score) = ($score, $n_score);
+				($longer_ident, $shorter_ident) = ($identity, $n_identity);
 			} else{
-				print "\t";
+				($longer_score, $shorter_score) = ($n_score, $score);
+				($longer_ident, $shorter_ident) = ($n_identity, $identity);
 			}
+			
+			my $hos_field;
+			if ((($longer_score / $shorter_score) > $score_threshold) and 
+			    (($longer_ident - $shorter_ident) > $identity_threshold)){
+				$hos_field = "HOS";
+			}
+			elsif ((($longer_score / $shorter_score) > $score_threshold) or 
+			       (($longer_ident - $shorter_ident) > $identity_threshold)){
+				$hos_field = "hos";
+			} else{
+				$hos_field = "";
+			}
+			# now print info for current repeat and next one, and increment value of $i
+			print "$counter\t$level\t$start\t$end\t$length\t$copies\t$score\t$identity\t$hos_field\t$seq_id\n";
+			print "$counter\t$level\t$n_start\t$n_end\t$n_length\t$n_copies\t$n_score\t$n_identity\t$hos_field\t$seq_id\n";
+			$i++;
 		} else{
-			print "\t";
-		}
-		print "$seq_id\n";			
+			print "$counter\t$level\t$start\t$end\t$length\t$copies\t$score\t$identity\t???\t$seq_id\n";
+		}		
 	}
 	$counter++;
-
 }
 
-print "\n";
+sub process_repeats{
+	my ($repeats) = @_;
+
+	# will add index values of potential HOS repeats to hash
+	my %potential_hos;
+	
+	# nested loop through previous repeats. Want to see if any are multiples of another
+	for (my $i = 0; $i < $repeats; $i++){
+		for (my $j = $i+1; $j < $repeats; $j++){
+
+			# want to see if current start/end coordinates are identical or within $offset nt of previous repeat
+			next unless (abs($repeat_data[$i]{start} - $repeat_data[$j]{start}) <= $offset);
+	 		next unless (abs($repeat_data[$i]{end}   - $repeat_data[$j]{end})   <= $offset);
+	
+			# $ratio is the ratio of the longest repeat to the shorter one, need longer repeat to be at least 
+			# 1.85x length of shorter repeat. How we calculate this depends on whether current repeat length is 
+			# longer than previous one or not
+			my $ratio;
+			
+			if ($repeat_data[$i]{length} < $repeat_data[$j]{length}){
+				$ratio = $repeat_data[$j]{length}/ $repeat_data[$i]{length};
+			} else{
+				$ratio = $repeat_data[$i]{length} / $repeat_data[$j]{length};
+			}
+			# need to factor in repeats which are not simple doublings in length
+			# e.g. compare 100 nt vs 300 nt, simple ratio is 3:1, but want to rule out
+			# lengths of 250 which are not multiples. So consider both ratio
+			# and processed ratio
+			my $processed_ratio = $ratio;
+			$processed_ratio =~ s/\d+\.(\d+)/0\.$1/;
+			next unless (($processed_ratio < 0.15 or $processed_ratio > 0.85) && ($ratio > 1.8));
+
+			# we should now be looking at two repeats which exhibit HOS
+			# store details as there may be other repeats in this sequence which overlap
+			$potential_hos{$i} = 1;
+			$potential_hos{$j} = 1;
+		}
+	}
+	# can now add details of each repeat to main hash
+	foreach my $key (keys %potential_hos){
+		my $hos_key  = $repeat_data[$key]{key};
+		my $hos_info = $repeat_data[$key]{info};
+
+		push(@{$hos{$hos_key}}, $hos_info);						
+	}
+}
