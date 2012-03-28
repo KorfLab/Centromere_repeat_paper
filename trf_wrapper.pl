@@ -3,7 +3,7 @@
 # trf_wrapper.pl
 #
 # A script to run the tandem repeat finder (trf) program and format the output
-# acccording to our needs
+# acccording to our needs.
 #
 # Last updated by: $Author$
 # Last updated on: $Date$
